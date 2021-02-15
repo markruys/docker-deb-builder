@@ -5,7 +5,7 @@ PROG_DIR=$(dirname $0)
 
 function usage {
     cat <<EOF 1>&2
-usage: $PROG [options...] SOURCEDIR
+usage: $PROG [options...] SOURCEDIR | SOURCETAR
 Options:
   -i IMAGE  Name of the docker image (including tag) to use as package build environment.
   -o DIR    Destination directory to store packages to.
@@ -20,7 +20,7 @@ function fatal {
 }
 
 function abspath {
-    echo $(cd "$1" && pwd)
+    echo "$(cd "$(dirname "$1")"; pwd -P)/$(basename "$1")"
 }
 
 
@@ -48,15 +48,23 @@ while getopts "i:o:d:h" opt; do
     esac
 done
 
-shift $(($OPTIND - 1))
-srcdir=$1
 docker_args="-it "
+
+shift $(($OPTIND - 1))
+if [ -d "$1" ]; then
+    srcdir=$1
+    [[ ! -r "$srcdir/debian" ]] && fatal "source directory does not contain debian sub directory"
+    docker_args+="-v $(abspath "$srcdir"):/source-ro:ro "
+elif [ -f "$1" ]; then
+    tarball=$1
+    docker_args+="-v $(abspath "$tarball"):/build/$(basename $tarball):ro "
+else
+    fatal "source directory or tarball not given"
+fi
 
 # Check that mandatory parameters are valid
 [[ !    "$outdir"        ]] && fatal "output directory was not given (-o DIR)"
 [[ ! -d "$outdir"        ]] && fatal "output directory does not exist: $outdir"
-[[ !    "$srcdir"        ]] && fatal "source directory not given"
-[[ ! -r "$srcdir/debian" ]] && fatal "source direcotry does not contain debian sub directory"
 [[ !    "$image"         ]] && fatal "docker image name not given (-i IMAGE)"
 
 # Check that optional parameters are valid
@@ -65,7 +73,7 @@ if [[ "$depdir" ]]; then
     docker_args+="-v $(abspath "$depdir"):/dependencies:ro "
 fi
 
-docker_args+="-v $(abspath "$srcdir"):/source-ro:ro -v $(abspath "$outdir"):/output -v $(cd $PROG_DIR; pwd)/build-helper.sh:/build-helper.sh:ro "
+docker_args+="-v $(abspath "$outdir"):/output -v $(cd $PROG_DIR; pwd)/build-helper.sh:/build-helper.sh:ro "
 
 # Pass current UID and GID to container, so that it can change the
 # ownership of output files which are otherwise writen to outdir as
@@ -77,6 +85,7 @@ docker_args+="-e USER=$(id -u) -e GROUP=$(id -g) "
 docker_args+="--rm "
 
 cmd="docker run -it $docker_args $image /build-helper.sh"
+#cmd="docker run -it $docker_args $image "
 
 echo "Running docker:"
 echo "$cmd"

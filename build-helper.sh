@@ -12,17 +12,27 @@
 [[ -d /dependencies ]] && dpkg -i /dependencies/*.deb || apt-get -f install -y --no-install-recommends
 
 # Make read-write copy of source code
-mkdir -p /build
-cp -a /source-ro /build/source
+if [ -f /build/*.orig.tar.gz ]; then
+    mkdir -p /build/source
+    tar xzf /build/*.orig.tar.gz --strip-components=1 -C /build/source
+    debuild_args=""
+elif [ -d source-ro ]; then
+    mkdir -p /build
+    cp -a /source-ro /build/source
+    debuild_args="-b"
+else
+    echo "No source found -- aborting"
+    exit 1
+fi
 cd /build/source
 
 # Install build dependencies
 mk-build-deps -ir -t "apt-get -o Debug::pkgProblemResolver=yes -y --no-install-recommends"
 
 # Build packages
-debuild -b -uc -us
+debuild $debuild_args -uc -us
 
 # Copy packages to output dir with user's permissions
-chown -R $USER:$GROUP /build
-cp -a /build/*.deb /output/
+cp -a /build/*.{deb,dsc,tar.gz,tar.xz} /output/
+chown -R $USER:$GROUP /output
 ls -l /output
