@@ -10,6 +10,8 @@ Options:
   -i IMAGE  Name of the docker image (including tag) to use as package build environment.
   -o DIR    Destination directory to store packages to.
   -d DIR    Directory that contains other deb packages that need to be installed before build.
+  -e EMAIL  Email address of the maintainer
+  -f NAME   Full name of the maintainer
 EOF
     exit 1
 }
@@ -23,12 +25,14 @@ function abspath {
     echo "$(cd "$(dirname "$1")"; pwd -P)/$(basename "$1")"
 }
 
+DEBEMAIL=""
+DEBFULLNAME=""
 
 ###########################################################################
 
 [[ $# -eq 0 ]] && usage
 
-while getopts "i:o:d:h" opt; do
+while getopts "i:o:d:e:f:h" opt; do
     case $opt in
         i)
             image="$OPTARG"
@@ -38,6 +42,12 @@ while getopts "i:o:d:h" opt; do
             ;;
         d)
             depdir="$OPTARG"
+            ;;
+        e)
+            DEBEMAIL="$OPTARG"
+            ;;
+        f)
+            DEBFULLNAME="$OPTARG"
             ;;
         h)
             usage
@@ -84,10 +94,6 @@ docker_args+="-e USER=$(id -u) -e GROUP=$(id -g) "
 # for debugging
 docker_args+="--rm "
 
-cmd="docker run -it $docker_args $image /build-helper.sh"
-#cmd="docker run -it $docker_args $image "
+docker run -it -e DEBFULLNAME="$DEBFULLNAME" -e DEBEMAIL="$DEBEMAIL" \
+  $docker_args $image /build-helper.sh
 
-echo "Running docker:"
-echo "$cmd"
-
-exec $cmd

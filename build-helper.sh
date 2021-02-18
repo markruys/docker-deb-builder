@@ -29,10 +29,17 @@ cd /build/source
 # Install build dependencies
 mk-build-deps -ir -t "apt-get -o Debug::pkgProblemResolver=yes -y --no-install-recommends"
 
+# Add a record to the changelog
+if [ -n "$DEBFULLNAME" -a -n "$DEBEMAIL" ]; then
+	VERSION=$(awk -F '=' '/^VERSION=/{print $2}' /etc/os-release)
+	VERSION_CODENAME=$(awk -F '=' '/^VERSION_CODENAME=/{print $2}' /etc/os-release)
+	dch -l "$VERSION_CODENAME" "Build for $VERSION"
+fi
+
 # Build packages
 debuild $debuild_args -uc -us
 
 # Copy packages to output dir with user's permissions
-cp -a /build/*.{deb,dsc,tar.gz,tar.xz} /output/
+find /build \( -name '*.deb' -o -name '*.dsc' -o -name '*.tar.*' \) -type f -exec cp -a {} /output/ \;
 chown -R $USER:$GROUP /output
 ls -l /output
